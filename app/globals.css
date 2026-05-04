@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* =========================
+   MENU PAGE (app/menu/page.tsx)
+   ========================= */
+.menuPage {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 18px;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji",
+    "Segoe UI Emoji";
+  color: #111;
+}
+
+.menuTopbar {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.menuTitle {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.3px;
+}
+
+.menuSub {
+  margin: 4px 0 0;
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.menuActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.menuLinkBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e6e6e6;
+  text-decoration: none;
+  color: #111;
+  background: #fff;
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.menuLinkBtnPrimary {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+
+.menuNotice {
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 12px 14px;
+  background: #fafafa;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 12px 0 14px;
+}
+
+.menuGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.menuCard {
+  border: 1px solid #e6e6e6;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.menuImg {
+  display: block;
+  width: 100%;
+  height: 260px;
+  object-fit: cover;
+}
+
+.menuCap {
+  padding: 10px 12px;
+  font-size: 12px;
+  opacity: 0.75;
+  border-top: 1px solid #f1f1f1;
+}
+
+.menuFooter {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+  font-size: 12px;
+  opacity: 0.75;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 680px) {
+  .menuGrid {
+    grid-template-columns: 1fr;
+  }
+  .menuImg {
+    height: 220px;
+  }
+}
+
+/* PRINT A4 — 1 PAGE */
+@page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  html,
+  body {
+    height: auto;
+  }
+
+  .menuPage {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .printOnePage {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .menuTitle {
+    font-size: 22px;
+  }
+
+  .menuSub {
+    font-size: 12px;
+  }
+
+  .menuNotice {
+    margin: 8px 0 10px;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .menuLinkBtn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .menuGrid {
+    gap: 8px;
+  }
+
+  .menuImg {
+    height: 185px; /* baisse si ça dépasse */
+  }
+
+  .menuCap {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
