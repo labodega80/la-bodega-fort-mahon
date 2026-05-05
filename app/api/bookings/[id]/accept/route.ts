@@ -1,3 +1,4 @@
+console.log("VERSION OK");
 import { sendEmail } from "@/lib/email";
 import Stripe from "stripe";
 import { readFile, writeFile } from "fs/promises";
