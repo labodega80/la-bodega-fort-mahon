@@ -10,7 +10,7 @@ export default function Home() {
     { src: "/images/galerie-5.jpg", alt: "La Bodega" },
     { src: "/images/galerie-6.jpg", alt: "La Bodega" },
     { src: "/images/galerie-7.jpg", alt: "La Bodega" },
-    { src: "/images/galerie-8.jpg", },
+    { src: "/images/galerie-8.jpg", alt: "La Bodega" },
   ];
 
   const styles: Record<string, React.CSSProperties> = {
