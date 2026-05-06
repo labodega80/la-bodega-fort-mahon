@@ -38,6 +38,21 @@ function extractIdFromUrl(req: Request) {
   return idx >= 0 ? parts[idx + 1] : "";
 }
 
+/* ✅ FIX STRIPE (évite crash Vercel) */
+let stripeInstance: Stripe;
+
+function getStripe() {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY missing");
+  }
+
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+
+  return stripeInstance;
+}
+
 export async function POST(req: Request) {
   try {
     const id = extractIdFromUrl(req);
@@ -46,12 +61,19 @@ export async function POST(req: Request) {
     const b = bookings.find((x) => String(x.id) === id);
 
     if (!id || !b) {
-      return Response.json({ ok: false, error: "Booking not found" }, { status: 404 });
+      return Response.json(
+        { ok: false, error: "Booking not found" },
+        { status: 404 }
+      );
     }
 
+    /* ❌ PAS AUTORISÉ */
     if (b.status !== "authorized") {
       return Response.json(
-        { ok: false, error: "Booking must be authorized (current: " + b.status + ")" },
+        {
+          ok: false,
+          error: "Booking must be authorized (current: " + b.status + ")",
+        },
         { status: 400 }
       );
     }
@@ -63,32 +85,38 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error("STRIPE_SECRET_KEY missing");
-    }
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    /* ✅ STRIPE SAFE */
+    const stripe = getStripe();
 
     const pi = await stripe.paymentIntents.capture(b.paymentIntentId);
 
     b.status = "captured";
     await save(bookings);
 
+    /* ✅ EMAIL CONFIRMATION */
     if (b.email) {
       await sendEmail(
         b.email,
-        "Reservation accepted",
+        "Réservation acceptée",
         "Bonjour " + (b.name || "") +
-        "\n\nVotre reservation du " + (b.date || "") +
-        " a " + (b.time || "") +
-        " est acceptee.\n\n— La Bodega"
+          "\n\nVotre réservation du " + (b.date || "") +
+          " à " + (b.time || "") +
+          " est acceptée.\n\n— La Bodega"
       );
     }
 
-    return Response.json({ ok: true, id: b.id });
+    return Response.json({
+      ok: true,
+      id: b.id,
+      stripeStatus: pi.status,
+    });
 
   } catch (e) {
-    console.error(e);
-    return Response.json({ ok: false, error: "Server error" }, { status: 500 });
+    console.error("ACCEPT ERROR:", e);
+
+    return Response.json(
+      { ok: false, error: "Server error" },
+      { status: 500 }
+    );
   }
 }
