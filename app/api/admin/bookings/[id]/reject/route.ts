@@ -23,8 +23,13 @@ type Booking = {
 const FILE = path.join(process.cwd(), "data", "bookings.json");
 
 async function load(): Promise<Booking[]> {
-  try { return JSON.parse(await readFile(FILE, "utf8")); } catch { return []; }
+  try {
+    return JSON.parse(await readFile(FILE, "utf8"));
+  } catch {
+    return [];
+  }
 }
+
 async function save(bookings: Booking[]) {
   await writeFile(FILE, JSON.stringify(bookings, null, 2), "utf8");
 }
@@ -35,7 +40,18 @@ function requireAdmin(req: Request) {
   return token === process.env.ADMIN_TOKEN;
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+/* ✅ IMPORTANT : FIX STRIPE */
+let stripeInstance: Stripe | null = null;
+
+function getStripe(): Stripe {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    throw new Error("STRIPE_SECRET_KEY missing");
+  }
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return stripeInstance;
+}
 
 export async function POST(
   req: Request,
@@ -46,26 +62,29 @@ export async function POST(
       return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    // ✅ Next.js 16: params peut être une Promise → on await
     const params = await (ctx.params as any);
     const idFromParams = params?.id ? String(params.id).trim() : "";
 
-    // fallback URL
     const idFromUrl = req.url.split("/").filter(Boolean).slice(-2, -1)[0] || "";
     const id = (idFromParams || idFromUrl).trim();
 
-    if (!id) return Response.json({ ok: false, error: "Missing id" }, { status: 400 });
+    if (!id) {
+      return Response.json({ ok: false, error: "Missing id" }, { status: 400 });
+    }
 
     const bookings = await load();
     const b = bookings.find((x) => x.id === id);
-    if (!b) return Response.json({ ok: false, error: "Booking not found", id }, { status: 404 });
 
-    // déjà capturé → idempotent
+    if (!b) {
+      return Response.json({ ok: false, error: "Booking not found", id }, { status: 404 });
+    }
+
     if (b.status === "captured") {
       return Response.json({ ok: true, id, stripeStatus: "already_captured" });
     }
 
-    // il faut une empreinte
+    const stripe = getStripe();
+
     if (!b.paymentIntentId && b.stripeSessionId) {
       try {
         const s = await stripe.checkout.sessions.retrieve(b.stripeSessionId);
@@ -74,38 +93,38 @@ export async function POST(
     }
 
     if (!b.paymentIntentId) {
-      return Response.json({ ok: false, error: "No paymentIntentId (not authorized yet)", id }, { status: 409 });
+      return Response.json(
+        { ok: false, error: "No paymentIntentId", id },
+        { status: 409 }
+      );
     }
 
-    // ✅ Stripe: si PI déjà canceled → renvoyer 409 propre
     const pi = await stripe.paymentIntents.retrieve(b.paymentIntentId);
 
     if (pi.status === "canceled") {
-      // si ça a été rejeté / annulé, on met la réservation en canceled localement aussi
       b.status = "canceled";
       await save(bookings);
 
       return Response.json(
-        { ok: false, error: "PaymentIntent canceled (cannot accept)", id, paymentIntentId: b.paymentIntentId, stripeStatus: pi.status },
+        { ok: false, error: "PaymentIntent canceled", stripeStatus: pi.status },
         { status: 409 }
       );
     }
 
-    // déjà succeeded → on marque captured
     if (pi.status === "succeeded") {
       b.status = "captured";
       await save(bookings);
-      return Response.json({ ok: true, id, paymentIntentId: b.paymentIntentId, stripeStatus: "already_captured" });
+
+      return Response.json({ ok: true, id, stripeStatus: "already_captured" });
     }
 
     if (pi.status !== "requires_capture") {
       return Response.json(
-        { ok: false, error: "PaymentIntent not capturable", id, paymentIntentId: b.paymentIntentId, stripeStatus: pi.status },
+        { ok: false, error: "Not capturable", stripeStatus: pi.status },
         { status: 409 }
       );
     }
 
-    // capture
     const captured = await stripe.paymentIntents.capture(b.paymentIntentId);
 
     b.status = "captured";
@@ -114,11 +133,14 @@ export async function POST(
     return Response.json({
       ok: true,
       id,
-      paymentIntentId: b.paymentIntentId,
       stripeStatus: captured.status,
     });
+
   } catch (err: any) {
-    console.error("ADMIN ACCEPT ERROR:", err);
-    return Response.json({ ok: false, error: "Server error", details: err?.message || String(err) }, { status: 500 });
+    console.error("ADMIN REJECT ERROR:", err);
+    return Response.json(
+      { ok: false, error: "Server error", details: err?.message || String(err) },
+      { status: 500 }
+    );
   }
 }
