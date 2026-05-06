@@ -1,25 +1,33 @@
-export async function sendEmail(to: string, subject: string, text: string) {
-  if (!process.env.SMTP_HOST) {
-    console.log("SMTP non configuré");
-    return;
+let resend: any = null;
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY manquante → email désactivé");
+    return null;
   }
 
-  const nodemailer = await import("nodemailer");
+  if (!resend) {
+    const { Resend } = require("resend");
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
 
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+  return resend;
+}
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_FROM,
-    to,
-    subject,
-    text,
-  });
+export async function sendEmail(to: string, subject: string, text: string) {
+  try {
+    const client = getResend();
+
+    if (!client) return; // pas de clé → on ignore
+
+    await client.emails.send({
+      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+      to,
+      subject,
+      text,
+    });
+
+  } catch (err) {
+    console.error("EMAIL ERROR:", err);
+  }
 }
