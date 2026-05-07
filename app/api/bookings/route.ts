@@ -63,14 +63,12 @@ export async function POST(req: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,
-
       payment_intent_data: {
         capture_method: "manual",
         metadata: {
           bookingId: booking.id,
         },
       },
-
       line_items: [
         {
           price_data: {
@@ -83,31 +81,27 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-
       metadata: {
         bookingId: booking.id,
       },
-
       success_url: `${appUrl}/reserver/success`,
       cancel_url: `${appUrl}/reserver/cancel`,
     });
 
-    // 📧 EMAIL (ICI 👍)
-    await resend.emails.send({
-      from: "La Bodega <la_bodega@fort-mahon.com>",
-      to: email,
-      subject: "Confirmation de réservation 🍽️",
-      html: `
-        <h2>Merci ${name} !</h2>
-        <p>Votre réservation a bien été enregistrée.</p>
-        <ul>
-          <li>Date : ${date}</li>
-          <li>Heure : ${time}</li>
-          <li>Personnes : ${guests}</li>
-        </ul>
-        <p>À très bientôt 🍷</p>
-      `,
-    });
+    // 📧 EMAIL DEBUG
+    try {
+      const result = await resend.emails.send({
+        from: "La Bodega <la_bodega@fort-mahon.com>",
+        to: email, // ⚠️ mets ton email perso ici pour tester si besoin
+        subject: "Test réservation 🍽️",
+        html: `<p>Test email OK pour ${name}</p>`,
+      });
+
+      console.log("EMAIL RESULT:", result);
+
+    } catch (emailErr: any) {
+      console.error("EMAIL ERROR:", emailErr);
+    }
 
     return Response.json({
       checkoutUrl: session.url,
