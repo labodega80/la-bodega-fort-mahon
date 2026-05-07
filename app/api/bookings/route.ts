@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       cancel_url: "https://labodega-fort-mahon.fr",
     });
 
-    return Response.json({ url: session.url });
+    return Response.json({ checkoutUrl: session.url });
 
   } catch (err: any) {
     console.error("FULL ERROR:", err);
