@@ -1,6 +1,4 @@
 ﻿import Stripe from "stripe";
-import { readFile, writeFile } from "fs/promises";
-import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,61 +12,15 @@ type Booking = {
   time: string;
   guests: number;
   amountCents: number;
-  status: "requested" | "authorized" | "captured" | "canceled";
-  stripeSessionId?: string;
-  paymentIntentId?: string;
 };
-
-const FILE = path.join(process.cwd(), "data", "bookings.json");
-
-async function load(): Promise<Booking[]> {
-  try {
-    return JSON.parse(await readFile(FILE, "utf8"));
-  } catch {
-    return [];
-  }
-}
-
-async function save(bookings: Booking[]) {
-  await writeFile(FILE, JSON.stringify(bookings, null, 2), "utf8");
-}
 
 function calcHoldCents(guests: number) {
   return Math.min(guests * 1000, 6000);
 }
 
-export async function GET() {
-  return Response.json(await load());
-}
-
 export async function POST(req: Request) {
   try {
-    const ct = req.headers.get("content-type") || "";
-    const raw = await req.text();
-
-    console.log("BOOKINGS content-type:", ct);
-    console.log("BOOKINGS raw body (first 200):", raw.slice(0, 200));
-
-    if (!ct.includes("application/json")) {
-      return Response.json(
-        { error: "Content-Type invalide", contentType: ct, raw: raw.slice(0, 200) },
-        { status: 400 }
-      );
-    }
-
-    let body: any;
-    try {
-      body = JSON.parse(raw);
-    } catch (e: any) {
-      return Response.json(
-        {
-          error: "JSON invalide envoyé à /api/bookings",
-          raw: raw.slice(0, 200),
-          details: e?.message,
-        },
-        { status: 400 }
-      );
-    }
+    const body = await req.json();
 
     const name = String(body.name || "").trim();
     const phone = String(body.phone || "").trim();
@@ -87,7 +39,7 @@ export async function POST(req: Request) {
       guests < 1 ||
       guests > 20
     ) {
-      return Response.json({ error: "Données invalides.", received: body }, { status: 400 });
+      return Response.json({ error: "Données invalides." }, { status: 400 });
     }
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -95,24 +47,7 @@ export async function POST(req: Request) {
     const id = Math.random().toString(36).slice(2);
     const amountCents = calcHoldCents(guests);
 
-    const bookings = await load();
-    const booking: Booking = {
-      id,
-      name,
-      phone,
-      email,
-      date,
-      time,
-      guests,
-      amountCents,
-      status: "requested",
-    };
-    bookings.push(booking);
-    await save(bookings);
-
     const appUrl = "https://labodega-fort-mahon.fr";
-
-    console.log("BOOKINGS: creating checkout session...");
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -134,22 +69,11 @@ export async function POST(req: Request) {
         },
       ],
 
-      // IMPORTANT: metadata au niveau de la session aussi
       metadata: { type: "booking_hold", bookingId: id },
 
       success_url: `${appUrl}/reserver/success`,
       cancel_url: `${appUrl}/reserver/cancel`,
     });
-
-    console.log("BOOKINGS: created checkout session", {
-      bookingId: id,
-      sessionId: session.id,
-      metadata: session.metadata,
-      url: session.url,
-    });
-
-    booking.stripeSessionId = session.id;
-    await save(bookings);
 
     return Response.json({
       ok: true,
@@ -158,6 +82,7 @@ export async function POST(req: Request) {
       sessionId: session.id,
       amountCents,
     });
+
   } catch (err: any) {
     console.error("BOOKINGS API ERROR:", err);
     return Response.json(
