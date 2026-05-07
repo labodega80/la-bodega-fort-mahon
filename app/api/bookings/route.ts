@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     bookings.push(booking);
     await save(bookings);
 
-    const appUrl = process.env.APP_URL || "http://localhost:3000";
+    const appUrl = "https://labodega-fort-mahon.fr";
 
     console.log("BOOKINGS: creating checkout session...");
 
