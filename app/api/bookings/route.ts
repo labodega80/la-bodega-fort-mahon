@@ -2,10 +2,10 @@
 import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const resend = new Resend(process.env.RESEND_API_KEY as string);
 
 function calcHoldCents(guests: number) {
   return Math.min(guests * 1000, 6000);
@@ -23,27 +23,20 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
-    const name = String(body.name || "").trim();
-    const phone = String(body.phone || "").trim();
-    const email = String(body.email || "").trim();
-    const date = String(body.date || "").trim();
-    const time = String(body.time || "").trim();
+    const name = String(body.name || "");
+    const phone = String(body.phone || "");
+    const email = String(body.email || "");
+    const date = String(body.date || "");
+    const time = String(body.time || "");
     const guests = Number(body.guests);
 
-    if (
-      !name ||
-      !phone ||
-      !email ||
-      !date ||
-      !time ||
-      !Number.isFinite(guests)
-    ) {
+    if (!name || !phone || !email || !date || !time || !guests) {
       return Response.json({ error: "Données invalides" }, { status: 400 });
     }
 
     const amount = calcHoldCents(guests);
 
-    // 💾 Sauvegarde
+    // 💾 DB
     const booking = await prisma.booking.create({
       data: {
         name,
@@ -63,12 +56,6 @@ export async function POST(req: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,
-      payment_intent_data: {
-        capture_method: "manual",
-        metadata: {
-          bookingId: booking.id,
-        },
-      },
       line_items: [
         {
           price_data: {
@@ -81,31 +68,26 @@ export async function POST(req: Request) {
           quantity: 1,
         },
       ],
-      metadata: {
-        bookingId: booking.id,
-      },
       success_url: `${appUrl}/reserver/success`,
       cancel_url: `${appUrl}/reserver/cancel`,
     });
 
-    // 📧 EMAIL DEBUG
+    // 📧 Email sécurisé
     try {
       const result = await resend.emails.send({
         from: "La Bodega <la_bodega@fort-mahon.com>",
-        to: email, // ⚠️ mets ton email perso ici pour tester si besoin
-        subject: "Test réservation 🍽️",
-        html: `<p>Test email OK pour ${name}</p>`,
+        to: email,
+        subject: "Confirmation de réservation",
+        html: `<p>Merci ${name}, réservation enregistrée.</p>`,
       });
 
       console.log("EMAIL RESULT:", result);
-
-    } catch (emailErr: any) {
-      console.error("EMAIL ERROR:", emailErr);
+    } catch (e) {
+      console.error("EMAIL ERROR:", e);
     }
 
     return Response.json({
       checkoutUrl: session.url,
-      bookingId: booking.id,
     });
 
   } catch (err: any) {
