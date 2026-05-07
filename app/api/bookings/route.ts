@@ -1,5 +1,8 @@
-﻿import Stripe from "stripe";
+﻿import { Resend } from "resend";
+import Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
 
     const amount = calcHoldCents(guests);
 
-    // 💾 SAUVEGARDE EN BASE
+    // 💾 Sauvegarde
     const booking = await prisma.booking.create({
       data: {
         name,
@@ -56,6 +59,7 @@ export async function POST(req: Request) {
 
     const appUrl = "https://labodega-fort-mahon.fr";
 
+    // 💳 Stripe
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,
@@ -88,6 +92,23 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/reserver/cancel`,
     });
 
+    // 📧 EMAIL (ICI 👍)
+    await resend.emails.send({
+      from: "La Bodega <la_bodega@fort-mahon.com>",
+      to: email,
+      subject: "Confirmation de réservation 🍽️",
+      html: `
+        <h2>Merci ${name} !</h2>
+        <p>Votre réservation a bien été enregistrée.</p>
+        <ul>
+          <li>Date : ${date}</li>
+          <li>Heure : ${time}</li>
+          <li>Personnes : ${guests}</li>
+        </ul>
+        <p>À très bientôt 🍷</p>
+      `,
+    });
+
     return Response.json({
       checkoutUrl: session.url,
       bookingId: booking.id,
@@ -100,5 +121,5 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}S
+}
 
