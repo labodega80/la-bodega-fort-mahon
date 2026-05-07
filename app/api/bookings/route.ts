@@ -3,15 +3,13 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Booking = {
-  id: string;
+type BookingInput = {
   name: string;
   phone: string;
   email: string;
   date: string;
   time: string;
   guests: number;
-  amountCents: number;
 };
 
 function calcHoldCents(guests: number) {
@@ -20,7 +18,26 @@ function calcHoldCents(guests: number) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    // 🔍 Vérif clé Stripe
+    const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+    if (!stripeKey) {
+      console.error("❌ STRIPE_SECRET_KEY manquante");
+      return Response.json(
+        { error: "Configuration Stripe manquante" },
+        { status: 500 }
+      );
+    }
+
+    const stripe = new Stripe(stripeKey);
+
+    // 📦 Lecture JSON
+    let body: BookingInput;
+    try {
+      body = await req.json();
+    } catch {
+      return Response.json({ error: "JSON invalide" }, { status: 400 });
+    }
 
     const name = String(body.name || "").trim();
     const phone = String(body.phone || "").trim();
@@ -29,6 +46,7 @@ export async function POST(req: Request) {
     const time = String(body.time || "").trim();
     const guests = Number(body.guests);
 
+    // ✅ Validation
     if (
       !name ||
       !phone ||
@@ -39,37 +57,50 @@ export async function POST(req: Request) {
       guests < 1 ||
       guests > 20
     ) {
-      return Response.json({ error: "Données invalides." }, { status: 400 });
+      return Response.json(
+        { error: "Données invalides" },
+        { status: 400 }
+      );
     }
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
     const id = Math.random().toString(36).slice(2);
     const amountCents = calcHoldCents(guests);
 
     const appUrl = "https://labodega-fort-mahon.fr";
 
+    // 💳 Création session Stripe
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer_email: email,
 
       payment_intent_data: {
         capture_method: "manual",
-        metadata: { bookingId: id, type: "booking_hold" },
+        metadata: {
+          bookingId: id,
+          name,
+          phone,
+          date,
+          time,
+          guests: String(guests),
+        },
       },
 
       line_items: [
         {
           price_data: {
             currency: "eur",
-            product_data: { name: `Empreinte réservation (${guests} pers.)` },
+            product_data: {
+              name: `Réservation (${guests} pers.)`,
+            },
             unit_amount: amountCents,
           },
           quantity: 1,
         },
       ],
 
-      metadata: { type: "booking_hold", bookingId: id },
+      metadata: {
+        bookingId: id,
+      },
 
       success_url: `${appUrl}/reserver/success`,
       cancel_url: `${appUrl}/reserver/cancel`,
@@ -79,14 +110,17 @@ export async function POST(req: Request) {
       ok: true,
       checkoutUrl: session.url,
       bookingId: id,
-      sessionId: session.id,
       amountCents,
     });
 
   } catch (err: any) {
-    console.error("BOOKINGS API ERROR:", err);
+    console.error("🔥 BOOKINGS ERROR:", err);
+
     return Response.json(
-      { error: "Erreur serveur /api/bookings", details: err?.message || String(err) },
+      {
+        error: "Erreur serveur /api/bookings",
+        details: err?.message || String(err),
+      },
       { status: 500 }
     );
   }
