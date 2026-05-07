@@ -90,9 +90,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "Données invalides.", received: body }, { status: 400 });
     }
 
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: "2024-06-20",
-   });
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
     const id = Math.random().toString(36).slice(2);
     const amountCents = calcHoldCents(guests);
