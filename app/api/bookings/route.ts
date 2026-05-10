@@ -5,10 +5,22 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const resend = new Resend(process.env.RESEND_API_KEY as string);
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 function calcHoldCents(guests: number) {
   return Math.min(guests * 1000, 6000);
+}
+
+export async function GET() {
+  const bookings = await prisma.booking.findMany({
+    orderBy: { createdAt: "desc" },
+  });
+
+  return new Response(JSON.stringify(bookings, null, 2), {
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 export async function POST(req: Request) {
@@ -72,9 +84,10 @@ export async function POST(req: Request) {
       cancel_url: `${appUrl}/reserver/cancel`,
     });
 
-    // 📧 Email sécurisé
+    // 📧 Email sécurisé 
     try {
-      const result = await resend.emails.send({
+      if (resend) {
+        const result = await resend.emails.send({
         from: "La Bodega <la_bodega@fort-mahon.com>",
         to: email,
         subject: "Confirmation de réservation",
@@ -82,9 +95,29 @@ export async function POST(req: Request) {
       });
 
       console.log("EMAIL RESULT:", result);
-    } catch (e) {
-      console.error("EMAIL ERROR:", e);
-    }
+
+      // 📧 notification resto
+      await resend.emails.send({
+        from: "La Bodega <la_bodega@fort-mahon.com>",
+        to: "la_bodega@fort-mahon.com",
+        subject: "🔔 Nouvelle réservation",
+        html: `
+        <h2>Nouvelle réservation</h2>
+        <p><strong>Nom :</strong> ${name}</p>
+        <p><strong>Téléphone :</strong> ${phone}</p>
+        <p><strong>Email :</strong> ${email}</p>
+        <hr />
+        <p><strong>Date :</strong> ${date}</p>
+        <p><strong>Heure :</strong> ${time}</p>
+        <p><strong>Personnes :</strong> ${guests}</p>
+        <hr />
+        <p><strong>ID :</strong> ${booking.id}</p>
+      `,
+    });
+  }
+} catch (e) {
+  console.error("EMAIL ERROR:", e);
+}
 
     return Response.json({
       checkoutUrl: session.url,

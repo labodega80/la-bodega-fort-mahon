@@ -16,6 +16,7 @@ model Booking {
   time      String
   guests    Int
   amount    Int
-  status    String
+  
+  status  String  @default("pending") //
   createdAt DateTime @default(now())
 }
